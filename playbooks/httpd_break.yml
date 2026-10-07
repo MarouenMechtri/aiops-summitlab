@@ -3,19 +3,12 @@
   hosts: all
   become: true
   vars:
-    # Tunable for troubleshooting "Server unreachable" / slow SSH
     httpd_break_sleep_seconds: 30
 
   tasks:
-    - name: Wait for SSH / connection (troubleshoot unreachable)
-      ansible.builtin.wait_for_connection:
-        timeout: 120
-
-    - name: Sleep before changes (troubleshoot unreachable / race)
-      ansible.builtin.pause:
-        seconds: "{{ httpd_break_sleep_seconds }}"
-      # pause shows countdown in job output; use sleep module if preferred:
-      # ansible.builtin.command: "sleep {{ httpd_break_sleep_seconds }}"
+    - name: Sleep (troubleshoot unreachable)
+      ansible.builtin.command: "sleep {{ httpd_break_sleep_seconds }}"
+      changed_when: false
 
     - name: Ensure Apache is installed
       ansible.builtin.dnf:
@@ -32,10 +25,6 @@
         state: present
       notify:
         - Restart apache
-
-    - name: Sleep after config change (allow logs / EDA to settle)
-      ansible.builtin.pause:
-        seconds: "{{ httpd_break_sleep_seconds }}"
 
   handlers:
     - name: Restart apache
