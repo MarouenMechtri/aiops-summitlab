@@ -2,14 +2,8 @@
 - name: Add bad directive under in Apache configuration
   hosts: all
   become: true
-  vars:
-    httpd_break_sleep_seconds: 30
 
   tasks:
-    - name: Sleep (troubleshoot unreachable)
-      ansible.builtin.command: "sleep {{ httpd_break_sleep_seconds }}"
-      changed_when: false
-
     - name: Ensure Apache is installed
       ansible.builtin.dnf:
         name: httpd
