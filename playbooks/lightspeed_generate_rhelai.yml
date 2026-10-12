@@ -1,58 +1,50 @@
 ---
-# Generate an Ansible playbook via RHEL AI (OpenAI-compatible API)
-# Replaces Lightspeed cloud: https://c.ai.ansible.redhat.com/api/v0/ai/generations/
+# Generate Ansible playbook via RHEL AI / MaaS OpenAI-compatible chat API.
+# Inputs (AAP survey / extra_vars) — only these three + lightspeed_prompt:
 #
-# AAP extra_vars / survey (examples):
-#   rhelai_server: 10.x.x.x or hostname reachable from EE
-#   rhelai_port: 8000
-#   rhelai_token: Bearer token for RHEL AI / vLLM
-#   rhelai_model_name: openai/granite-3-2-8b-instruct  (or path used by your server)
-#   lightspeed_prompt: natural language remediation request
+#   rhelai_server: https://maas-rhdp.apps.maas.redhatworkshops.io/chat/completions
+#   rhelai_token: <Bearer / sk-...>
+#   rhelai_model_name: claude-sonnet-4-6
+#   lightspeed_prompt: <natural language request>
 #
-# Response shape differs from Lightspeed (no .playbook field):
-#   chat/completions → choices[0].message.content
-#   completions      → choices[0].text
+# Do not commit real tokens to git — set rhelai_token in AAP Credential / survey.
 
 - name: Generate Ansible Playbook with RHEL AI
   hosts: localhost
   gather_facts: false
   vars:
-    _rhelai_proto: "{{ rhelai_url_proto | default('http') }}"
-    _rhelai_server: "{{ rhelai_server | default(rhelai_server_input | default('rhelai')) }}"
-    _rhelai_port: "{{ rhelai_port | default(rhelai_port_input | default('8000')) }}"
-    _rhelai_token: "{{ rhelai_token | default(rhelai_token_input | default('')) }}"
-    _rhelai_model: >-
-      {{ rhelai_model_name | default('openai/granite-3-2-8b-instruct') }}
-    _rhelai_api_mode: "{{ rhelai_api_mode | default('chat') }}"  # chat | completions
-    _prompt: "{{ lightspeed_prompt | default(gpt_prompt | default('')) }}"
+    rhelai_server: "{{ rhelai_server | default('https://maas-rhdp.apps.maas.redhatworkshops.io/chat/completions') }}"
+    rhelai_model_name: "{{ rhelai_model_name | default('claude-sonnet-4-6') }}"
+    _prompt: "{{ lightspeed_prompt | default('') }}"
     _system_prompt: >-
-      {{ rhelai_system_prompt | default(
-           'You are an Ansible expert. Reply with ONLY a valid Ansible playbook in YAML. '
-           ~ 'No markdown fences, no explanation before or after the YAML.'
-         ) }}
+      You are an Ansible expert. Reply with ONLY a valid Ansible playbook in YAML.
+      No markdown fences, no explanation before or after the YAML.
 
   tasks:
-    - name: Validate prompt and RHEL AI endpoint
+    - name: Validate required inputs
       ansible.builtin.assert:
         that:
+          - rhelai_server is defined and (rhelai_server | length) > 0
+          - rhelai_token is defined and (rhelai_token | length) > 0
+          - rhelai_model_name is defined and (rhelai_model_name | length) > 0
           - _prompt | length > 0
-          - _rhelai_server | length > 0
-        fail_msg: "Set lightspeed_prompt (or gpt_prompt) and rhelai_server."
+        fail_msg: >-
+          Need rhelai_server (full chat/completions URL), rhelai_token,
+          rhelai_model_name, and lightspeed_prompt.
 
-    - name: Call RHEL AI chat completions
-      when: _rhelai_api_mode == 'chat'
+    - name: Send request to RHEL AI / MaaS chat completions
       ansible.builtin.uri:
-        url: "{{ _rhelai_proto }}://{{ _rhelai_server }}:{{ _rhelai_port }}/v1/chat/completions"
+        url: "{{ rhelai_server }}"
         method: POST
         headers:
           accept: "application/json"
           Content-Type: "application/json"
-          Authorization: "Bearer {{ _rhelai_token }}"
+          Authorization: "Bearer {{ rhelai_token }}"
         body_format: json
         body:
-          model: "{{ _rhelai_model }}"
-          temperature: "{{ rhelai_temperature | default(0.2) | float }}"
-          max_tokens: "{{ rhelai_max_tokens | default(2048) | int }}"
+          model: "{{ rhelai_model_name }}"
+          temperature: 0.2
+          max_tokens: 2048
           messages:
             - role: system
               content: "{{ _system_prompt }}"
@@ -60,36 +52,12 @@
               content: "{{ _prompt }}"
         return_content: true
         status_code: 200
-        timeout: "{{ rhelai_timeout | default(180) | int }}"
-        validate_certs: "{{ rhelai_validate_certs | default(false) }}"
+        timeout: 180
+        validate_certs: true
       register: rhelai_response
-      no_log: "{{ rhelai_no_log | default(true) }}"
+      no_log: true
 
-    - name: Call RHEL AI completions (legacy / InstructLab style)
-      when: _rhelai_api_mode == 'completions'
-      ansible.builtin.uri:
-        url: "{{ _rhelai_proto }}://{{ _rhelai_server }}:{{ _rhelai_port }}/v1/completions"
-        method: POST
-        headers:
-          accept: "application/json"
-          Content-Type: "application/json"
-          Authorization: "Bearer {{ _rhelai_token }}"
-        body_format: json
-        body:
-          model: "{{ _rhelai_model }}"
-          prompt: "{{ _system_prompt }}\n\nUser request:\n{{ _prompt }}\n\nPlaybook YAML:\n"
-          max_tokens: "{{ rhelai_max_tokens | default(2048) | int }}"
-          temperature: "{{ rhelai_temperature | default(0.2) | float }}"
-          top_p: "{{ rhelai_top_p | default(1) | float }}"
-          n: 1
-        return_content: true
-        status_code: 200
-        timeout: "{{ rhelai_timeout | default(180) | int }}"
-        validate_certs: "{{ rhelai_validate_certs | default(false) }}"
-      register: rhelai_response
-      no_log: "{{ rhelai_no_log | default(true) }}"
-
-    - name: Extract model text from OpenAI-compatible response
+    - name: Extract model text
       ansible.builtin.set_fact:
         _raw_content: >-
           {{
@@ -107,11 +75,6 @@
             | regex_replace('(?s)\\s*```\\s*$', '')
             | trim
           }}
-
-    - name: Display API response (safe)
-      ansible.builtin.debug:
-        msg: "{{ rhelai_response.json | default(rhelai_response.content) }}"
-      when: not (rhelai_no_log | default(true) | bool)
 
     - name: Display generated playbook
       ansible.builtin.debug:
