@@ -12,6 +12,8 @@
         project: "{{ input_project | default('Lightspeed-Playbooks') }}"
         playbook: "{{ input_playbook | default('lightspeed-response.yml') }}"
         credential: "{{ input_credential | default('lab-credential') }}"
+        instance_groups:
+          - "{{ input_instance_group | default('sno-hostnetwork') }}"
         validate_certs: false
         execution_environment: "Default execution environment"
         become_enabled: true
