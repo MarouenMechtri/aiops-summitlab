@@ -3,11 +3,12 @@
   gather_facts: false
 
   tasks:
-
     - name: Set input variables for repository
       ansible.builtin.set_fact:
         repo_name: "{{ input_repo_name | default('lightspeed_playbooks') }}"
         repo_description: "{{ input_repo_description | default('Repository for Lightspeed Ansible Playbooks') }}"
+        gitea_user: "{{ gitea_user | default(input_gitea_username | default('gitea')) }}"
+        gitea_base_url: "{{ gitea_url | regex_replace('/$', '') }}"
 
     - name: Retrieve existing repository or initialize it locally
       ansible.scm.git_retrieve:
@@ -15,9 +16,11 @@
           duplicate_detection: false
           name: main
         origin:
-          url: "{{ gitea_url }}/lab-user/{{ repo_name }}.git"
+          url: "{{ gitea_base_url }}/{{ gitea_user }}/{{ repo_name }}.git"
           token: "{{ gitea_token }}"
       register: repository
+      environment:
+        GIT_SSL_NO_VERIFY: "true"
 
     #########################################################################
     # Safety guard - Ensure AI-generated playbook works with lab inventory #
@@ -25,7 +28,6 @@
 
     - name: Ensure execution readiness for AI-generated playbook
       block:
-
         - name: Parse Lightspeed playbook into structured data
           ansible.builtin.set_fact:
             parsed_playbook: "{{ lightspeed_playbook | from_yaml }}"
@@ -47,7 +49,6 @@
           ansible.builtin.set_stats:
             data:
               lightspeed_playbook_parsed: "{{ lightspeed_playbook_parsed }}"
-
       tags: preflight
 
     #########################################################################
@@ -56,9 +57,11 @@
       ansible.builtin.copy:
         content: "{{ lightspeed_playbook_parsed }}"
         dest: "{{ repository['path'] }}/lightspeed-response.yml"
-        mode: '0644'
+        mode: "0644"
 
     - name: Commit and push final version of playbook to Gitea
       ansible.scm.git_publish:
         path: "{{ repository['path'] }}"
         token: "{{ gitea_token }}"
+      environment:
+        GIT_SSL_NO_VERIFY: "true"
