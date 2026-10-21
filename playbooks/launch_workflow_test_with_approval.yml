@@ -1,16 +1,12 @@
 ---
 # Wrapper playbook: Automation Portal cannot expose Workflow Job Templates.
-# Expose THIS playbook as a Job Template with a survey (vpc_name, test).
+# Expose THIS playbook as a Job Template (no survey needed).
 # It launches the workflow "test with approval", which runs the playbook
-# that consumes those survey variables (e.g. Cloud/AWS Create VPC).
+# that consumes vpc_name and test (e.g. Cloud/AWS Create VPC).
 #
 # Job Template setup (Controller):
 #   - Inventory: localhost / Demo Inventory (or any inventory with localhost)
 #   - Credential: Red Hat Ansible Automation Platform (API access)
-#   - Survey enabled:
-#       vpc_name  (text)           — e.g. question "Enter a name for the AWS VPC"
-#       test      (multiple choice) — e.g. Yes / No
-#   - Extra variables prompt: optional (survey vars are enough)
 
 - name: Launch workflow "test with approval" (Portal wrapper)
   hosts: localhost
@@ -20,22 +16,13 @@
   vars:
     workflow_name: "test with approval"
     workflow_organization: Default
-    # Survey / extra_vars from the Job Template (Portal form)
-    vpc_name: "{{ vpc_name | default('my_vpc') }}"
-    test: "{{ test | default('Yes') }}"
+    # Hardcoded — matches Create VPC survey defaults (no JT survey required)
+    vpc_name: my_vpc
+    test: "Yes"
     wait_for_workflow: true
     workflow_timeout_seconds: 3600
 
   tasks:
-    - name: Validate required survey variables
-      ansible.builtin.assert:
-        that:
-          - vpc_name is defined and (vpc_name | length) > 0
-          - test is defined and (test | string | length) > 0
-        fail_msg: >-
-          Survey variables vpc_name and test are required.
-          Configure them on the Job Template survey (Portal form).
-
     - name: Show launch parameters
       ansible.builtin.debug:
         msg:
