@@ -7,6 +7,8 @@
 # Job Template setup (Controller):
 #   - Inventory: localhost / Demo Inventory (or any inventory with localhost)
 #   - Credential: Red Hat Ansible Automation Platform (API access)
+#   - Survey: disabled (values are hardcoded below)
+#   - Sync / update the project before launching
 
 - name: Launch workflow "test with approval" (Portal wrapper)
   hosts: localhost
@@ -16,9 +18,6 @@
   vars:
     workflow_name: "test with approval"
     workflow_organization: Default
-    # Hardcoded — matches Create VPC survey defaults (no JT survey required)
-    vpc_name: my_vpc
-    test: "Yes"
     wait_for_workflow: true
     workflow_timeout_seconds: 3600
 
@@ -28,8 +27,8 @@
         msg:
           workflow: "{{ workflow_name }}"
           organization: "{{ workflow_organization }}"
-          vpc_name: "{{ vpc_name }}"
-          test: "{{ test }}"
+          vpc_name: my_vpc
+          test: "Yes"
 
     - name: Launch workflow job template
       ansible.controller.workflow_launch:
@@ -39,8 +38,8 @@
         timeout: "{{ workflow_timeout_seconds }}"
         validate_certs: "{{ controller_verify_ssl | default(omit) }}"
         extra_vars:
-          vpc_name: "{{ vpc_name }}"
-          test: "{{ test }}"
+          vpc_name: my_vpc
+          test: "Yes"
       register: workflow_launch
       # Auth: attach an AAP / Controller credential to the Job Template
       # (sets CONTROLLER_HOST + CONTROLLER_USERNAME/PASSWORD or OAuth token).
